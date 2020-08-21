@@ -13,6 +13,17 @@ HLT = 0b00000001
 MUL = 0b10100010
 PUSH = 0b01000101
 POP = 0b01000110
+CALL = 0b01010000
+RET = 0b00010001
+
+CMP = 0b10100111
+JEQ = 0b01010101
+JNE = 0b01010110
+JMP = 0b01010100
+
+EFLAG = 0b001
+LFLAG = 0b011
+GFLAG = 0b010
 
 
 class CPU:
@@ -33,6 +44,11 @@ class CPU:
         self.branchtable[PUSH] = self.handlePUSH
         self.branchtable[POP] = self.handlePOP
 
+        self.branchtable[CMP] = self.handleCMP
+        self.branchtable[JMP] = self.handleJMP
+        self.branchtable[JEQ] = self.handleJEQ
+        self.branchtable[JNE] = self.handleJNE
+
         #All CPUs manage a stack that can be used to store information temporarily. This stack resides in main memory and typically starts at the top of memory (at a high address) and grows downward as things are pushed on
 
         self.stack_pointer = 0xf4
@@ -41,6 +57,12 @@ class CPU:
 
         #The stack pointer points at the value at the top of the stack (most recently pushed), or at address `F4` if the stack is empty.
 
+        """0xff is the hexadecimal number FF which has a integer value of 255. And the binary representation of FF is 00000000000000000000000011111111 (under the 32-bit integer).
+
+The & operator performs a bitwise AND operation. a & b will give you an integer with a bit pattern that has a 0 in all positions where b has a 0, while in all positions where b has a 1, the corresponding bit value froma is used (this also goes the other way around). For example, the bitwise AND of 10110111 and00001101 is 00000101.
+
+In a nutshell, “& 0xff” effectively masks the variable so it leaves only the value in the last 8 bits, and ignores all the rest of the bits.
+"""
         self.reg[7] = self.stack_pointer
 
     def load(self):
@@ -101,7 +123,17 @@ class CPU:
 
         if op == "ADD":
             self.reg[reg_a] += self.reg[reg_b]
-        # elif op == "SUB": etc
+        elif op == "MUL":
+            self.reg[reg_a] = self.reg[reg_a] * self.reg[reg_b]
+        elif op == "CMP":
+            a = self.reg[reg_a]
+            b = self.reg[reg_b]
+            if a > b:
+                self.flag = GFLAG
+            elif a < b:
+                self.flag = LFLAG
+            else:
+                self.flag = EFLAG
         else:
             raise Exception("Unsupported ALU operation")
 
@@ -170,8 +202,32 @@ class CPU:
         # Increase the stack pointer and program counter
         self.stack_pointer += 1
         self.stack_pointer &= 0xff  # Maintian range of 00-FF bits
+        # The bitwise AND assignment operator (&=) uses the binary representation of both operands, does a bitwise AND operation on them and assigns the result to the variable.
 
         self.pc += 2
+
+    def handleCMP(self, a, b):
+        self.alu('CMP', a, b)
+        self.pc += 3
+
+    # Jump to the address stored in the given register
+    def handleJMP(self, a, b):
+        self.pc = self.reg[a]
+
+    # If `equal` flag is set (true), jump to the address stored in the given register.
+    def handleJEQ(self, a, b):
+        if self.flag == EFLAG:
+            self.pc = self.reg[a]
+        else:
+            self.pc += 2
+
+    # If `E` flag is clear (false, 0), jump to the address stored in the given register.
+    def handleJNE(self, a, b):
+        if self.flag != EFLAG:
+            self.pc = self.reg[a]
+        else:
+            self.pc += 2
+    
 
     def run(self):
         """Run the CPU."""
